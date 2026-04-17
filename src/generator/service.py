@@ -1,6 +1,7 @@
+import inspect
 import json
 import os
-from typing import Any, Dict, Optional, Type, TypeVar
+from typing import Any, Awaitable, Callable, Dict, Optional, Type, TypeVar
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -21,11 +22,24 @@ from .state import AnswerKeyPayload, GeneratedGroupsPayload, QuizGenerationState
 load_dotenv()
 
 T = TypeVar("T", bound=BaseModel)
+ProgressCallback = Callable[[str, Dict[str, Any]], Optional[Awaitable[None]]]
 
 
 def _validate_model(model_class: Type[T],
                     payload: Dict[str, Any]) -> T:
     return model_class.model_validate(payload)
+
+
+async def _emit_progress(
+    progress_callback: Optional[ProgressCallback],
+    stage: str,
+    **payload: Any,
+) -> None:
+    if progress_callback is None:
+        return
+    result = progress_callback(stage, payload)
+    if inspect.isawaitable(result):
+        await result
 
 
 def build_generation_state(
@@ -179,6 +193,7 @@ class PassageExamGenerator:
         title: Optional[str] = None,
         description: str = "",
         questions_per_group: Optional[int] = None,
+        progress_callback: Optional[ProgressCallback] = None,
     ) -> PassageExamDocument:
         resolved_title = title or source.title
         resolved_description = description or f"Generated from source file {source.title}"
@@ -189,7 +204,21 @@ class PassageExamGenerator:
             questions_per_group or "Auto",
         )
 
+        await _emit_progress(
+            progress_callback,
+            "starting",
+            title=resolved_title,
+            source_title=source.title,
+            questions_per_group=questions_per_group,
+            message="Preparing generation request.",
+        )
         logger.info("Step 1/2: Requesting group generation from OpenAI...")
+        await _emit_progress(
+            progress_callback,
+            "requesting_groups",
+            title=resolved_title,
+            message="Generating passage groups from the source document.",
+        )
         groups_payload = _validate_model(
             GeneratedGroupsPayload,
             await self.client.generate_groups(
@@ -207,6 +236,17 @@ class PassageExamGenerator:
             len(groups_payload.groups),
             total_questions,
         )
+        await _emit_progress(
+            progress_callback,
+            "groups_generated",
+            title=resolved_title,
+            groups_count=len(groups_payload.groups),
+            questions_count=total_questions,
+            message=(
+                f"Generated {len(groups_payload.groups)} passage groups and "
+                f"{total_questions} questions. Solving answer key next."
+            ),
+        )
 
         state = build_generation_state(
             title=resolved_title,
@@ -215,6 +255,14 @@ class PassageExamGenerator:
         )
 
         logger.info("Step 2/2: Requesting answer generation from OpenAI...")
+        await _emit_progress(
+            progress_callback,
+            "requesting_answers",
+            title=resolved_title,
+            groups_count=len(groups_payload.groups),
+            questions_count=total_questions,
+            message="Generating answer key for the draft questions.",
+        )
         answer_key = _validate_model(
             AnswerKeyPayload,
             await self.client.answer_quiz(state=state),
@@ -222,6 +270,14 @@ class PassageExamGenerator:
 
         logger.info(
             "Answer key successfully generated. Building final document.")
+        await _emit_progress(
+            progress_callback,
+            "answers_generated",
+            title=resolved_title,
+            groups_count=len(groups_payload.groups),
+            questions_count=total_questions,
+            message="Answer key generated. Building normalized document.",
+        )
 
         document = build_document_from_state(
             state=state,
@@ -231,6 +287,14 @@ class PassageExamGenerator:
             "Completed generation of normalized exam '{}' with {} passage groups and {} total questions",
             document.title, len(document.groups),
             sum(len(group.questions) for group in document.groups))
+        await _emit_progress(
+            progress_callback,
+            "completed",
+            title=document.title,
+            groups_count=len(document.groups),
+            questions_count=sum(len(group.questions) for group in document.groups),
+            message="Generation completed successfully.",
+        )
         return document
 
 

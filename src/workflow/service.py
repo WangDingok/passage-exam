@@ -101,6 +101,21 @@ class PassageExamWorkflowService:
         self.generator = generator or PassageExamGenerator()
         self.uploader = uploader or PassageExamUploader()
 
+    async def _create_draft_event(
+        self,
+        *,
+        draft_id: str,
+        event_type: str,
+        actor_id: str,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        await self.workflow_operations.create_event({
+            "draft_id": draft_id,
+            "event_type": event_type,
+            "payload_json": payload or {},
+            "actor_id": actor_id,
+        })
+
     async def list_drafts(
         self,
         *,
@@ -208,11 +223,36 @@ class PassageExamWorkflowService:
             title=draft.title,
             text=draft.source_text,
         )
+
+        async def report_generation_progress(stage: str,
+                                             payload: Dict[str, Any]) -> None:
+            await self._create_draft_event(
+                draft_id=draft_id,
+                event_type="generation_progress",
+                actor_id=actor_id,
+                payload={
+                    "stage": stage,
+                    **payload,
+                },
+            )
+
+        await self._create_draft_event(
+            draft_id=draft_id,
+            event_type="generation_started",
+            actor_id=actor_id,
+            payload={
+                "questions_per_group": request.questions_per_group,
+                "source_filename": draft.source_filename,
+                "source_text_length": len(draft.source_text),
+                "message": "Generation request started.",
+            },
+        )
         document = await self.generator.generate(
             source=source,
             title=draft.title,
             description=draft.description,
             questions_per_group=request.questions_per_group,
+            progress_callback=report_generation_progress,
         )
         payload = document_to_payload(document)
         updated = await self.workflow_operations.update_draft(
@@ -233,10 +273,11 @@ class PassageExamWorkflowService:
         )
         if not updated:
             raise DraftNotFoundError(f"draft not found: {draft_id}")
-        await self.workflow_operations.create_event({
-            "draft_id": draft_id,
-            "event_type": "generated",
-            "payload_json": {
+        await self._create_draft_event(
+            draft_id=draft_id,
+            event_type="generated",
+            actor_id=actor_id,
+            payload={
                 "questions_per_group":
                 request.questions_per_group,
                 "groups_count":
@@ -244,8 +285,7 @@ class PassageExamWorkflowService:
                 "questions_count":
                 sum(len(group.questions) for group in document.groups),
             },
-            "actor_id": actor_id,
-        })
+        )
         return await self.get_draft(draft_id)
 
     async def update_draft(self, draft_id: str, request: DraftUpdateRequest, *,

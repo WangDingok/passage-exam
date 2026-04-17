@@ -97,6 +97,34 @@ class PassageExamGeneratorTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual("<p>Lua chon A</p>", document.groups[0].questions[0].choices[0].content)
 
+    async def test_generate_reports_progress_stages(self):
+        client = FakePassageClient(self.groups_payload, self.answers_payload)
+        generator = PassageExamGenerator(client=client)
+        progress_updates = []
+
+        async def capture_progress(stage, payload):
+            progress_updates.append((stage, payload))
+
+        await generator.generate(
+            source=self.source,
+            questions_per_group=1,
+            progress_callback=capture_progress,
+        )
+
+        self.assertEqual(
+            [
+                "starting",
+                "requesting_groups",
+                "groups_generated",
+                "requesting_answers",
+                "answers_generated",
+                "completed",
+            ],
+            [stage for stage, _ in progress_updates],
+        )
+        self.assertEqual(1, progress_updates[2][1]["groups_count"])
+        self.assertEqual(1, progress_updates[2][1]["questions_count"])
+
     def test_build_document_from_state_rejects_mismatched_answers(self):
         state = build_generation_state(
             title="De doc hieu moi",

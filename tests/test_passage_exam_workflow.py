@@ -81,7 +81,16 @@ class FakeWorkflowOperations:
 
 class FakeGenerator:
     async def generate(self, **kwargs):
-        del kwargs
+        progress_callback = kwargs.get("progress_callback")
+        if progress_callback is not None:
+            await progress_callback(
+                "requesting_groups",
+                {"message": "Generating passage groups from the source document."},
+            )
+            await progress_callback(
+                "requesting_answers",
+                {"message": "Generating answer key for the draft questions."},
+            )
         from src.workflow.service import validate_document_payload
 
         return validate_document_payload(make_document())
@@ -143,6 +152,9 @@ class PassageExamWorkflowServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("De doc hieu moi", generated.title)
         self.assertIsNotNone(generated.normalized_document_json)
         self.assertEqual("generated", generated.events[0].event_type)
+        self.assertEqual("generation_progress", generated.events[1].event_type)
+        self.assertEqual("generation_progress", generated.events[2].event_type)
+        self.assertEqual("generation_started", generated.events[3].event_type)
 
     async def test_update_rejects_invalid_document(self):
         draft = await self.service.upload_source(
