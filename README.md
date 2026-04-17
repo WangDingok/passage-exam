@@ -5,7 +5,7 @@
 1. Create and fill your local env file:
 
 ```bash
-copy .env.example .env
+cp .env.example .env
 ```
 
 Required values:
