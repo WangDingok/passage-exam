@@ -49,6 +49,12 @@ npm run dev
 
 The checked-in Vite config serves the UI on `http://127.0.0.1:5174` and proxies API calls to `http://127.0.0.1:8001`.
 
+On Windows PowerShell, use the bundled launcher instead of `bash start.sh`:
+
+```powershell
+.\start.ps1
+```
+
 ## Troubleshooting
 
 ### 1. Publish fails with `fk_materials_created_by`

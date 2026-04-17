@@ -201,10 +201,23 @@ Generate and upload in one flow:
 python -m src.main run --input <file-or-dir> --created-by <user-id>
 ```
 
-Run the workflow API:
+Run the workflow API and UI:
+
+For Windows local development, use the bundled launcher to start both the API and Vite UI:
+
+```powershell
+.\start.ps1
+```
+
+Otherwise, start them separately:
 
 ```bash
 python -m src.main serve --host 127.0.0.1 --port 8001
+```
+
+```bash
+cd frontend
+npm run dev
 ```
 
 ## Testing
