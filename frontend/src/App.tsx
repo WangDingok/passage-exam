@@ -97,11 +97,35 @@ function App() {
   const [generationProgress, setGenerationProgress] = useState<GenerationProgressState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"source" | "validation">("source");
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const generationRunRef = useRef(0);
 
   useEffect(() => {
     void refreshDrafts();
   }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setStatusDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      void refreshDrafts();
+    }, 500);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [search, status]);
 
   function handleRequestError(requestError: unknown) {
     const validationIssues = getValidationIssuesFromError(requestError);
@@ -447,13 +471,33 @@ function App() {
               ↻
             </button>
           </div>
-          <select value={status} onChange={(event) => setStatus(event.target.value as DraftStatus | "")}>
-            {statusOptions.map((option) => (
-              <option key={option.label} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className="custom-select-container" ref={dropdownRef}>
+            <button
+              className="custom-select-button"
+              onClick={() => setStatusDropdownOpen((prev) => !prev)}
+              aria-expanded={statusDropdownOpen}
+            >
+              <span>{statusOptions.find((o) => o.value === status)?.label || "All"}</span>
+              <span className="custom-select-arrow"></span>
+            </button>
+            {statusDropdownOpen && (
+              <div className="custom-select-dropdown">
+                {statusOptions.map((option) => (
+                  <button
+                    key={option.label}
+                    className={`custom-select-option ${status === option.value ? "selected" : ""}`}
+                    onClick={() => {
+                      setStatus(option.value as DraftStatus | "");
+                      setStatusDropdownOpen(false);
+                    }}
+                  >
+                    <span className="custom-select-checkmark">{status === option.value ? "✓" : ""}</span>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="draft-list">
