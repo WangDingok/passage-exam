@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 
 import {
   generateDraft,
@@ -10,6 +10,7 @@ import {
   validateDraft
 } from "./api";
 import {
+  DraftEvent,
   DraftDetail,
   DraftStatus,
   DraftSummary,
@@ -26,6 +27,60 @@ const statusOptions: Array<{ label: string; value: DraftStatus | "" }> = [
   { label: "Published", value: "published" }
 ];
 
+type BusyMode = "loading" | "uploading" | "generating" | "saving" | "validating" | "publishing";
+
+interface GenerationProgressState {
+  stage: string;
+  percent: number;
+  title: string;
+  message: string;
+  groupsCount?: number;
+  questionsCount?: number;
+}
+
+const generationStageMeta: Record<string, { percent: number; title: string }> = {
+  generation_started: { percent: 6, title: "Queued generation" },
+  starting: { percent: 12, title: "Preparing prompt" },
+  requesting_groups: { percent: 34, title: "Generating passage groups" },
+  groups_generated: { percent: 58, title: "Groups drafted" },
+  requesting_answers: { percent: 76, title: "Generating answer key" },
+  answers_generated: { percent: 91, title: "Building normalized exam" },
+  completed: { percent: 100, title: "Generation completed" }
+};
+
+function toOptionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function getGenerationProgressState(draft: DraftDetail): GenerationProgressState | null {
+  for (const event of draft.events) {
+    if (event.event_type !== "generation_progress" && event.event_type !== "generation_started") {
+      continue;
+    }
+
+    const rawStage = event.payload_json.stage;
+    const stage =
+      typeof rawStage === "string" && rawStage in generationStageMeta ? rawStage : "generation_started";
+    const stageMeta = generationStageMeta[stage] ?? generationStageMeta.generation_started;
+    const rawMessage = event.payload_json.message;
+
+    return {
+      stage,
+      percent: stageMeta.percent,
+      title: stageMeta.title,
+      message: typeof rawMessage === "string" ? rawMessage : "Generating quiz...",
+      groupsCount: toOptionalNumber(event.payload_json.groups_count),
+      questionsCount: toOptionalNumber(event.payload_json.questions_count)
+    };
+  }
+
+  return null;
+}
+
+function isGenerationEvent(event: DraftEvent): boolean {
+  return event.event_type === "generation_progress" || event.event_type === "generation_started";
+}
+
 function App() {
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
   const [selectedDraft, setSelectedDraft] = useState<DraftDetail | null>(null);
@@ -36,8 +91,11 @@ function App() {
   const [file, setFile] = useState<File | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
+  const [busyMode, setBusyMode] = useState<BusyMode | null>(null);
+  const [generationProgress, setGenerationProgress] = useState<GenerationProgressState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"source" | "validation">("source");
+  const generationRunRef = useRef(0);
 
   useEffect(() => {
     void refreshDrafts();
@@ -55,6 +113,8 @@ function App() {
 
   async function loadDraft(draftId: string) {
     try {
+      setBusyMode("loading");
+      setGenerationProgress(null);
       setBusyLabel("Loading draft...");
       setError(null);
       const detail = await getDraft(draftId);
@@ -64,6 +124,7 @@ function App() {
     } catch (requestError) {
       setError(String(requestError));
     } finally {
+      setBusyMode(null);
       setBusyLabel(null);
     }
   }
@@ -71,6 +132,8 @@ function App() {
   async function handleUpload() {
     if (!file) return;
     try {
+      setBusyMode("uploading");
+      setGenerationProgress(null);
       setBusyLabel("Uploading source...");
       const draft = await uploadDraft(file);
       await refreshDrafts();
@@ -79,21 +142,98 @@ function App() {
     } catch (requestError) {
       setError(String(requestError));
     } finally {
+      setBusyMode(null);
       setBusyLabel(null);
     }
   }
 
   async function handleGenerate() {
     if (!selectedDraft) return;
+    const draftId = selectedDraft.id;
+    let pollTimer: number | undefined;
+    const generationRunId = generationRunRef.current + 1;
+    generationRunRef.current = generationRunId;
+
+    let isPolling = true;
+    let forceResolve: ((draft: DraftDetail) => void) | null = null;
+    const pollPromise = new Promise<DraftDetail>((resolve) => {
+      forceResolve = resolve;
+    });
+
+    const syncGenerationProgress = async () => {
+      const detail = await getDraft(draftId);
+      if (generationRunRef.current !== generationRunId) {
+        return detail;
+      }
+
+      const progress = getGenerationProgressState(detail);
+      if (progress) {
+        setGenerationProgress(prev => {
+          if (!prev || prev.stage !== progress.stage || prev.message !== progress.message || prev.percent !== progress.percent) {
+            return progress;
+          }
+          return prev;
+        });
+        setBusyLabel(prev => prev !== progress.message ? progress.message : prev);
+      }
+
+      // If backend finished and updated the status, we can resolve early!
+      if (detail.status === "generated" || detail.status === "published") {
+        if (forceResolve) forceResolve(detail);
+      }
+
+      return detail;
+    };
+
     try {
-      setBusyLabel("Generating quiz...");
-      const draft = await generateDraft(selectedDraft.id, Number(questionsPerGroup));
-      setSelectedDraft(draft);
-      setEditingDocument(draft.normalized_document_json ?? null);
+      setError(null);
+      setBusyMode("generating");
+      setGenerationProgress({
+        stage: "generation_started",
+        percent: generationStageMeta.generation_started.percent,
+        title: generationStageMeta.generation_started.title,
+        message: "Generation request started."
+      });
+      setBusyLabel("Generation request started.");
+      
+      const pollProgress = async () => {
+        if (!isPolling) return;
+        try {
+          await syncGenerationProgress();
+        } catch (err) {}
+        if (isPolling) {
+          pollTimer = window.setTimeout(pollProgress, 1500);
+        }
+      };
+      pollTimer = window.setTimeout(pollProgress, 1500);
+
+      const generationPromise = generateDraft(draftId, Number(questionsPerGroup));
+      void syncGenerationProgress().catch(() => {});
+      
+      // Race the API call against the polling detection.
+      // If ngrok hangs but polling finishes first, we win and unblock!
+      // If the API throws an error (like 500 or 400), race will throw, and we show the error.
+      const finalDraft = await Promise.race([generationPromise, pollPromise]);
+
+      const completedProgress = getGenerationProgressState(finalDraft);
+      if (completedProgress) {
+        setGenerationProgress(completedProgress);
+      }
+      setSelectedDraft(finalDraft);
+      setEditingDocument(finalDraft.normalized_document_json ?? null);
       await refreshDrafts();
     } catch (requestError) {
       setError(String(requestError));
     } finally {
+      if (generationRunRef.current === generationRunId) {
+        generationRunRef.current = 0;
+      }
+      isPolling = false;
+      if (pollTimer !== undefined) {
+        window.clearTimeout(pollTimer);
+      }
+      setBusyMode(null);
+      setGenerationProgress(null);
       setBusyLabel(null);
     }
   }
@@ -101,6 +241,8 @@ function App() {
   async function handleSave() {
     if (!selectedDraft) return;
     try {
+      setBusyMode("saving");
+      setGenerationProgress(null);
       setBusyLabel("Saving draft...");
       const draft = await saveDraft(selectedDraft.id, {
         title: editingDocument?.title ?? selectedDraft.title,
@@ -113,6 +255,7 @@ function App() {
     } catch (requestError) {
       setError(String(requestError));
     } finally {
+      setBusyMode(null);
       setBusyLabel(null);
     }
   }
@@ -120,6 +263,8 @@ function App() {
   async function handleValidate() {
     if (!selectedDraft) return;
     try {
+      setBusyMode("validating");
+      setGenerationProgress(null);
       setBusyLabel("Saving & Validating draft...");
       
       // Tự động lưu trước khi validate để đảm bảo BE kiểm tra dữ liệu mới nhất
@@ -134,6 +279,7 @@ function App() {
     } catch (requestError) {
       setError(String(requestError));
     } finally {
+      setBusyMode(null);
       setBusyLabel(null);
     }
   }
@@ -141,6 +287,8 @@ function App() {
   async function handlePublish() {
     if (!selectedDraft) return;
     try {
+      setBusyMode("publishing");
+      setGenerationProgress(null);
       setBusyLabel("Saving & Publishing exam...");
       
       // Tự động lưu bản mới nhất từ giao diện xuống database trước
@@ -157,6 +305,7 @@ function App() {
     } catch (requestError) {
       setError(String(requestError));
     } finally {
+      setBusyMode(null);
       setBusyLabel(null);
     }
   }
@@ -228,6 +377,23 @@ function App() {
     updateDocument({ ...editingDocument, groups });
   }
 
+  const isBusy = Boolean(busyLabel);
+  const busyTitle =
+    busyMode === "generating"
+      ? generationProgress?.title ?? "Generating quiz"
+      : busyMode === "loading"
+        ? "Loading draft"
+        : busyMode === "uploading"
+          ? "Uploading source"
+          : busyMode === "saving"
+            ? "Saving review"
+            : busyMode === "validating"
+              ? "Validating draft"
+              : busyMode === "publishing"
+                ? "Publishing exam"
+                : "Working";
+  const busyMessage = busyLabel ?? "Please wait...";
+
   return (
     <div className="app-layout">
       <aside className="sidebar">
@@ -247,7 +413,7 @@ function App() {
               accept=".txt,.doc,.docx"
               onChange={(event: ChangeEvent<HTMLInputElement>) => setFile(event.target.files?.[0] ?? null)}
             />
-            <button className="btn-primary" onClick={handleUpload} disabled={!file || Boolean(busyLabel)}>
+            <button className="btn-primary" onClick={handleUpload} disabled={!file || isBusy}>
               Upload Source
             </button>
           </div>
@@ -260,7 +426,7 @@ function App() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
-            <button className="btn-icon" onClick={() => void refreshDrafts()} disabled={Boolean(busyLabel)} title="Refresh">
+            <button className="btn-icon" onClick={() => void refreshDrafts()} disabled={isBusy} title="Refresh">
               ↻
             </button>
           </div>
@@ -296,7 +462,7 @@ function App() {
         </div>
       </aside>
 
-      <main className="workspace">
+      <main className={`workspace ${isBusy ? "is-busy" : ""}`}>
         {selectedDraft ? (
           <>
             <header className="workspace-header">
@@ -316,17 +482,17 @@ function App() {
                     value={questionsPerGroup}
                     onChange={(event) => setQuestionsPerGroup(event.target.value)}
                   />
-                  <button onClick={handleGenerate} disabled={Boolean(busyLabel)}>
+                  <button onClick={handleGenerate} disabled={isBusy}>
                     Generate
                   </button>
                 </div>
-                <button onClick={handleSave} disabled={!editingDocument || Boolean(busyLabel)}>
+                <button onClick={handleSave} disabled={!editingDocument || isBusy}>
                   Save Review
                 </button>
-                <button onClick={handleValidate} disabled={Boolean(busyLabel)}>
+                <button onClick={handleValidate} disabled={isBusy}>
                   Validate
                 </button>
-                <button className="btn-primary" onClick={handlePublish} disabled={!editingDocument || Boolean(busyLabel)}>
+                <button className="btn-primary" onClick={handlePublish} disabled={!editingDocument || isBusy}>
                   Publish
                 </button>
               </div>
@@ -364,6 +530,9 @@ function App() {
                             <li key={event.id}>
                               <strong>{event.event_type}</strong>
                               <span>{new Date(event.created_at).toLocaleString()}</span>
+                              {isGenerationEvent(event) && typeof event.payload_json.message === "string" ? (
+                                <p className="muted" style={{ margin: "0.25rem 0 0" }}>{event.payload_json.message}</p>
+                              ) : null}
                               <code>{JSON.stringify(event.payload_json)}</code>
                             </li>
                           ))}
@@ -489,6 +658,33 @@ function App() {
             </svg>
             <h3>Select a Draft</h3>
             <p>Upload a source file or select an existing draft from the sidebar to start reviewing.</p>
+          </div>
+        )}
+        {isBusy && (
+          <div className="busy-overlay" aria-live="polite" aria-busy="true">
+            <div className="busy-card">
+              <div className="busy-header terminal-style">
+                <div className="busy-info">
+                  <strong><span className="prompt-arrow">&gt;</span> {busyTitle}<span className="animated-dots"></span></strong>
+                  <span className="terminal-message">{busyMessage}</span>
+                </div>
+              </div>
+              {busyMode === "generating" && generationProgress ? (
+                <>
+                  <div className="busy-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={generationProgress.percent}>
+                    <div className="busy-progress-fill" style={{ width: `${generationProgress.percent}%` }} />
+                  </div>
+                  <div className="busy-progress-meta">
+                    <span>{generationProgress.percent}%</span>
+                    <span>
+                      {generationProgress.groupsCount ?? 0} groups
+                      {" • "}
+                      {generationProgress.questionsCount ?? 0} questions
+                    </span>
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
         )}
       </main>
