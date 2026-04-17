@@ -1,6 +1,8 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
 import {
+  getErrorMessage,
+  getValidationIssuesFromError,
   generateDraft,
   getDraft,
   listDrafts,
@@ -101,13 +103,22 @@ function App() {
     void refreshDrafts();
   }, []);
 
+  function handleRequestError(requestError: unknown) {
+    const validationIssues = getValidationIssuesFromError(requestError);
+    if (validationIssues.length > 0) {
+      setIssues(validationIssues);
+      setActiveTab("validation");
+    }
+    setError(getErrorMessage(requestError));
+  }
+
   async function refreshDrafts() {
     try {
       setError(null);
       const items = await listDrafts(search || undefined, status || undefined);
       setDrafts(items);
     } catch (requestError) {
-      setError(String(requestError));
+      handleRequestError(requestError);
     }
   }
 
@@ -122,7 +133,7 @@ function App() {
       setEditingDocument(detail.normalized_document_json ?? null);
       setIssues([]);
     } catch (requestError) {
-      setError(String(requestError));
+      handleRequestError(requestError);
     } finally {
       setBusyMode(null);
       setBusyLabel(null);
@@ -132,6 +143,7 @@ function App() {
   async function handleUpload() {
     if (!file) return;
     try {
+      setError(null);
       setBusyMode("uploading");
       setGenerationProgress(null);
       setBusyLabel("Uploading source...");
@@ -140,7 +152,7 @@ function App() {
       await loadDraft(draft.id);
       setFile(null);
     } catch (requestError) {
-      setError(String(requestError));
+      handleRequestError(requestError);
     } finally {
       setBusyMode(null);
       setBusyLabel(null);
@@ -223,7 +235,7 @@ function App() {
       setEditingDocument(finalDraft.normalized_document_json ?? null);
       await refreshDrafts();
     } catch (requestError) {
-      setError(String(requestError));
+      handleRequestError(requestError);
     } finally {
       if (generationRunRef.current === generationRunId) {
         generationRunRef.current = 0;
@@ -241,6 +253,7 @@ function App() {
   async function handleSave() {
     if (!selectedDraft) return;
     try {
+      setError(null);
       setBusyMode("saving");
       setGenerationProgress(null);
       setBusyLabel("Saving draft...");
@@ -253,7 +266,7 @@ function App() {
       setEditingDocument(draft.normalized_document_json ?? null);
       await refreshDrafts();
     } catch (requestError) {
-      setError(String(requestError));
+      handleRequestError(requestError);
     } finally {
       setBusyMode(null);
       setBusyLabel(null);
@@ -263,21 +276,24 @@ function App() {
   async function handleValidate() {
     if (!selectedDraft) return;
     try {
+      setError(null);
       setBusyMode("validating");
       setGenerationProgress(null);
       setBusyLabel("Saving & Validating draft...");
       
       // Tự động lưu trước khi validate để đảm bảo BE kiểm tra dữ liệu mới nhất
-      await saveDraft(selectedDraft.id, {
+      const draft = await saveDraft(selectedDraft.id, {
         title: editingDocument?.title ?? selectedDraft.title,
         description: editingDocument?.description ?? selectedDraft.description,
         normalized_document_json: editingDocument
       });
+      setSelectedDraft(draft);
+      setEditingDocument(draft.normalized_document_json ?? null);
 
-      const result = await validateDraft(selectedDraft.id);
+      const result = await validateDraft(draft.id);
       setIssues(result.issues);
     } catch (requestError) {
-      setError(String(requestError));
+      handleRequestError(requestError);
     } finally {
       setBusyMode(null);
       setBusyLabel(null);
@@ -287,6 +303,7 @@ function App() {
   async function handlePublish() {
     if (!selectedDraft) return;
     try {
+      setError(null);
       setBusyMode("publishing");
       setGenerationProgress(null);
       setBusyLabel("Saving & Publishing exam...");
@@ -303,7 +320,7 @@ function App() {
       setEditingDocument(draft.normalized_document_json ?? null);
       await refreshDrafts();
     } catch (requestError) {
-      setError(String(requestError));
+      handleRequestError(requestError);
     } finally {
       setBusyMode(null);
       setBusyLabel(null);
