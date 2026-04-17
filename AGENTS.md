@@ -6,7 +6,7 @@ It is intentionally isolated from the legacy flow in `src/main.py`. Treat the ol
 
 ## Mission
 
-Build, validate, generate, and upload "câu hỏi chùm" exams using this package only.
+Build, validate, generate, and upload passage exams using this package only.
 
 The package supports:
 
