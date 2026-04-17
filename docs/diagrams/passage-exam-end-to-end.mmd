@@ -1,0 +1,40 @@
+flowchart TD
+    %%{init: {"flowchart": {"nodeSpacing": 60, "rankSpacing": 80}}}%%
+    A([Input Source]) ---> B{Mode}
+
+    subgraph Workflow_Layer [1. API & Workflow Flow]
+        direction TB
+        W1[Create Draft] ---> W2[Parse Source]
+        W2 ---> W3[Generate LLM]
+        W3 ---> W4[Validate]
+        W4 ---> W5[UI Review]
+        W5 ---> W6[Log Event]
+    end
+
+    subgraph CLI_Layer [2. CLI Direct Flow]
+        direction TB
+        C1[Parse Source] ---> C2[Generate LLM]
+        C2 ---> C3[Validate]
+        C3 ---> C4[Write JSON]
+    end
+
+    subgraph Publish_Layer [3. Upload Publish]
+        direction TB
+        U1[Hash Source] ---> U2[Check Duplicates]
+        U2 ---> U3[Resolve IDs]
+        U3 ---> U4[Lock ID]
+        U4 ---> U5[Atomic Insert]
+    end
+
+    %% Routing
+    B --->|API / UI| W1
+    W5 --->|Publish| U1
+
+    B --->|CLI| C1
+    C4 --->|Upload| U1
+
+    %% Upload Logic
+    U2 -.->|Duplicate| U_Skip([Skip / Fail])
+    U5 --->|Success| U_Done([Done])
+    U5 -.->|PKey Conflict| U6[Handle Race] ---> U_Done
+

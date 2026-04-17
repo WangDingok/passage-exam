@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="900" viewBox="0 0 1240 900" role="img" aria-labelledby="title desc">
+  <title id="title">Passage Exam Table Relationship Diagram</title>
+  <desc id="desc">Entity relationship diagram showing the tables used by the passage exam upload flow.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7c3aed"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 600 24px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+      .entity { fill: #ffffff; stroke: #475569; stroke-width: 2; rx: 14; ry: 14; }
+      .head { fill: #ede9fe; stroke: #7c3aed; stroke-width: 2; rx: 14; ry: 14; }
+      .entity-title { font: 700 18px "Segoe UI", Arial, sans-serif; fill: #4c1d95; }
+      .field { font: 500 15px "Segoe UI", Arial, sans-serif; fill: #1e293b; }
+      .rel { stroke: #7c3aed; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .rel-text { font: 600 14px "Segoe UI", Arial, sans-serif; fill: #6d28d9; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1240" height="900"/>
+  <text class="title" x="40" y="44">Passage Exam Table Relationships</text>
+
+  <g transform="translate(50 100)">
+    <rect class="entity" width="240" height="140"/>
+    <rect class="head" width="240" height="42"/>
+    <text class="entity-title" x="120" y="27" text-anchor="middle">MATERIAL_CATEGORIES</text>
+    <text class="field" x="18" y="72">uuid id</text>
+    <text class="field" x="18" y="100">string code</text>
+  </g>
+
+  <g transform="translate(350 90)">
+    <rect class="entity" width="260" height="198"/>
+    <rect class="head" width="260" height="42"/>
+    <text class="entity-title" x="130" y="27" text-anchor="middle">MATERIALS</text>
+    <text class="field" x="18" y="72">uuid id</text>
+    <text class="field" x="18" y="100">uuid category_id</text>
+    <text class="field" x="18" y="128">string created_by</text>
+    <text class="field" x="18" y="156">string title / description</text>
+    <text class="field" x="18" y="184">id can be deterministic in skip or fail</text>
+  </g>
+
+  <g transform="translate(680 100)">
+    <rect class="entity" width="250" height="150"/>
+    <rect class="head" width="250" height="42"/>
+    <text class="entity-title" x="125" y="27" text-anchor="middle">EXAMS</text>
+    <text class="field" x="18" y="72">uuid id</text>
+    <text class="field" x="18" y="100">uuid material_id</text>
+    <text class="field" x="18" y="128">string created_by / description</text>
+  </g>
+
+  <g transform="translate(980 90)">
+    <rect class="entity" width="220" height="160"/>
+    <rect class="head" width="220" height="42"/>
+    <text class="entity-title" x="110" y="27" text-anchor="middle">EXAM_QUESTIONS</text>
+    <text class="field" x="18" y="72">uuid id</text>
+    <text class="field" x="18" y="100">uuid exam_id</text>
+    <text class="field" x="18" y="128">uuid question_id</text>
+    <text class="field" x="18" y="156">string created_by</text>
+  </g>
+
+  <g transform="translate(70 420)">
+    <rect class="entity" width="250" height="150"/>
+    <rect class="head" width="250" height="42"/>
+    <text class="entity-title" x="125" y="27" text-anchor="middle">QUESTION_CATEGORIES</text>
+    <text class="field" x="18" y="72">uuid id</text>
+    <text class="field" x="18" y="100">string code</text>
+    <text class="field" x="18" y="128">uuid parent_id</text>
+  </g>
+
+  <g transform="translate(420 380)">
+    <rect class="entity" width="280" height="200"/>
+    <rect class="head" width="280" height="42"/>
+    <text class="entity-title" x="140" y="27" text-anchor="middle">QUESTIONS</text>
+    <text class="field" x="18" y="72">uuid id</text>
+    <text class="field" x="18" y="100">uuid parent_id</text>
+    <text class="field" x="18" y="128">uuid category_id</text>
+    <text class="field" x="18" y="156">string created_by</text>
+    <text class="field" x="18" y="184">int order_number, string name</text>
+  </g>
+
+  <g transform="translate(830 420)">
+    <rect class="entity" width="250" height="170"/>
+    <rect class="head" width="250" height="42"/>
+    <text class="entity-title" x="125" y="27" text-anchor="middle">HOTSPOTS</text>
+    <text class="field" x="18" y="72">uuid id</text>
+    <text class="field" x="18" y="100">uuid question_id / parent_id</text>
+    <text class="field" x="18" y="128">boolean is_correct</text>
+    <text class="field" x="18" y="156">int order_number, string content</text>
+  </g>
+
+  <path class="rel" d="M 290 170 L 350 170"/>
+  <text class="rel-text" x="300" y="158">category_of</text>
+
+  <path class="rel" d="M 610 170 L 680 170"/>
+  <text class="rel-text" x="620" y="158">material_for</text>
+
+  <path class="rel" d="M 930 170 L 980 170"/>
+  <text class="rel-text" x="935" y="158">contains</text>
+
+  <path class="rel" d="M 320 495 L 420 495"/>
+  <text class="rel-text" x="340" y="483">category_of</text>
+
+  <path class="rel" d="M 700 495 L 830 495"/>
+  <text class="rel-text" x="724" y="483">has_choices</text>
+
+  <path class="rel" d="M 1090 250 C 1090 320, 860 320, 700 430"/>
+  <text class="rel-text" x="920" y="312">linked_from_parent</text>
+
+  <path class="rel" d="M 560 380 C 560 335, 770 280, 980 210"/>
+  <text class="rel-text" x="700" y="332">question_id</text>
+
+  <path class="rel" d="M 560 580 C 560 650, 320 650, 320 570"/>
+  <text class="rel-text" x="360" y="668">has_sub_questions</text>
+
+  <text class="field" x="50" y="830">Upload path uses one nested insert_exams_one mutation.</text>
+  <text class="field" x="50" y="856">That mutation creates material, exam_questions, parent questions, child questions, and flat answer hotspots together.</text>
+</svg>

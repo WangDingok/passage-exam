@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="940" viewBox="0 0 1200 940" role="img" aria-labelledby="title desc">
+  <title id="title">Passage Exam Database Interaction Diagram</title>
+  <desc id="desc">Sequence diagram showing interaction among CLI, parser, generator, uploader, and Hasura.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 600 24px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+      .actor { fill: #ffffff; stroke: #475569; stroke-width: 2; rx: 12; ry: 12; }
+      .actor-text { font: 600 18px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+      .lifeline { stroke: #94a3b8; stroke-width: 2; stroke-dasharray: 8 8; }
+      .msg { stroke: #2563eb; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .reply { stroke: #0f766e; stroke-width: 3; fill: none; marker-end: url(#arrow); stroke-dasharray: 10 6; }
+      .label { font: 500 15px "Segoe UI", Arial, sans-serif; fill: #1e293b; }
+      .loop { fill: #eff6ff; stroke: #60a5fa; stroke-width: 2; rx: 12; ry: 12; }
+      .loop-text { font: 600 16px "Segoe UI", Arial, sans-serif; fill: #1d4ed8; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1200" height="940"/>
+  <text class="title" x="40" y="44">Passage Exam Database Interaction</text>
+
+  <rect class="actor" x="70" y="80" width="120" height="50"/>
+  <text class="actor-text" x="130" y="112" text-anchor="middle">CLI</text>
+  <line class="lifeline" x1="130" y1="130" x2="130" y2="890"/>
+
+  <rect class="actor" x="280" y="80" width="120" height="50"/>
+  <text class="actor-text" x="340" y="112" text-anchor="middle">Parser</text>
+  <line class="lifeline" x1="340" y1="130" x2="340" y2="890"/>
+
+  <rect class="actor" x="490" y="80" width="140" height="50"/>
+  <text class="actor-text" x="560" y="112" text-anchor="middle">Generator</text>
+  <line class="lifeline" x1="560" y1="130" x2="560" y2="890"/>
+
+  <rect class="actor" x="720" y="80" width="130" height="50"/>
+  <text class="actor-text" x="785" y="112" text-anchor="middle">Uploader</text>
+  <line class="lifeline" x1="785" y1="130" x2="785" y2="890"/>
+
+  <rect class="actor" x="965" y="80" width="130" height="50"/>
+  <text class="actor-text" x="1030" y="112" text-anchor="middle">Hasura</text>
+  <line class="lifeline" x1="1030" y1="130" x2="1030" y2="890"/>
+
+  <line class="msg" x1="130" y1="170" x2="340" y2="170"/>
+  <text class="label" x="235" y="160" text-anchor="middle">Discover and parse input</text>
+
+  <line class="reply" x1="340" y1="215" x2="130" y2="215"/>
+  <text class="label" x="235" y="205" text-anchor="middle">ParsedSourceDocument</text>
+
+  <line class="msg" x1="130" y1="260" x2="560" y2="260"/>
+  <text class="label" x="345" y="250" text-anchor="middle">Generate normalized document</text>
+
+  <line class="reply" x1="560" y1="305" x2="130" y2="305"/>
+  <text class="label" x="345" y="295" text-anchor="middle">PassageExamDocument</text>
+
+  <line class="msg" x1="130" y1="350" x2="785" y2="350"/>
+  <text class="label" x="457" y="340" text-anchor="middle">Upload document</text>
+
+  <line class="msg" x1="785" y1="395" x2="1030" y2="395"/>
+  <text class="label" x="907" y="385" text-anchor="middle">Resolve question categories</text>
+
+  <line class="reply" x1="1030" y1="440" x2="785" y2="440"/>
+  <text class="label" x="907" y="430" text-anchor="middle">Question category ids</text>
+
+  <line class="msg" x1="785" y1="485" x2="1030" y2="485"/>
+  <text class="label" x="907" y="475" text-anchor="middle">Resolve material categories</text>
+
+  <line class="reply" x1="1030" y1="530" x2="785" y2="530"/>
+  <text class="label" x="907" y="520" text-anchor="middle">Material category ids</text>
+
+  <line class="msg" x1="785" y1="575" x2="1030" y2="575"/>
+  <text class="label" x="907" y="565" text-anchor="middle">Check duplicate by title and hash marker</text>
+
+  <line class="reply" x1="1030" y1="620" x2="785" y2="620"/>
+  <text class="label" x="907" y="610" text-anchor="middle">Duplicate or empty</text>
+
+  <line class="msg" x1="785" y1="665" x2="930" y2="665"/>
+  <text class="label" x="857" y="655" text-anchor="middle">Derive deterministic material id</text>
+
+  <line class="msg" x1="785" y1="715" x2="1030" y2="715"/>
+  <text class="label" x="907" y="705" text-anchor="middle">Insert one nested exam mutation</text>
+
+  <rect class="loop" x="745" y="740" width="325" height="86"/>
+  <text class="loop-text" x="765" y="764">Atomic Hasura write set</text>
+  <text class="label" x="907" y="790" text-anchor="middle">materials + exam_questions</text>
+  <text class="label" x="907" y="812" text-anchor="middle">parent questions + child questions + flat answer hotspots</text>
+
+  <line class="reply" x1="1030" y1="855" x2="785" y2="855"/>
+  <text class="label" x="907" y="845" text-anchor="middle">Exam id material id parent ids child ids</text>
+
+  <line class="msg" x1="785" y1="890" x2="1030" y2="890"/>
+  <text class="label" x="907" y="880" text-anchor="middle">On materials_pkey conflict read material by deterministic id</text>
+</svg>

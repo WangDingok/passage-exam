@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" role="img" aria-labelledby="title desc">
+  <title id="title">Passage Exam End-to-End Logic</title>
+  <desc id="desc">Flow diagram showing generate and upload paths for the passage exam pipeline.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4f46e5"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .frame { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 18; ry: 18; }
+      .group { fill: #f8fafc; stroke: #94a3b8; stroke-width: 2; rx: 18; ry: 18; stroke-dasharray: 8 6; }
+      .node { fill: #ffffff; stroke: #475569; stroke-width: 2; rx: 12; ry: 12; }
+      .decision { fill: #eef2ff; stroke: #4f46e5; stroke-width: 2; }
+      .skip { fill: #fef2f2; stroke: #dc2626; stroke-width: 2; rx: 12; ry: 12; }
+      .line { stroke: #4f46e5; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .line-alt { stroke: #0f766e; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .label { font: 600 24px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+      .text { font: 500 18px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+      .small { font: 500 15px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1200" height="780"/>
+  <text class="label" x="50" y="46">Passage Exam End-to-End Logic</text>
+
+  <rect class="node" x="50" y="90" width="190" height="60"/>
+  <text class="text" x="145" y="126" text-anchor="middle">Input file or directory</text>
+
+  <rect class="node" x="290" y="90" width="110" height="60"/>
+  <text class="text" x="345" y="126" text-anchor="middle">CLI</text>
+
+  <polygon class="decision" points="495,82 570,120 495,158 420,120"/>
+  <text class="text" x="495" y="126" text-anchor="middle">Command</text>
+
+  <path class="line" d="M 240 120 L 290 120"/>
+  <path class="line" d="M 400 120 L 420 120"/>
+
+  <rect class="group" x="80" y="220" width="450" height="380"/>
+  <text class="label" x="110" y="255">Generate Flow</text>
+
+  <rect class="node" x="120" y="285" width="180" height="68"/>
+  <text class="text" x="210" y="317" text-anchor="middle">Discover</text>
+  <text class="small" x="210" y="339" text-anchor="middle">txt / doc / docx</text>
+
+  <rect class="node" x="120" y="395" width="180" height="68"/>
+  <text class="text" x="210" y="435" text-anchor="middle">Parse source</text>
+
+  <rect class="node" x="120" y="505" width="180" height="68"/>
+  <text class="text" x="210" y="537" text-anchor="middle">Generate with</text>
+  <text class="small" x="210" y="559" text-anchor="middle">Azure OpenAI</text>
+
+  <rect class="node" x="325" y="340" width="180" height="68"/>
+  <text class="text" x="415" y="372" text-anchor="middle">Validate</text>
+  <text class="small" x="415" y="394" text-anchor="middle">document contract</text>
+
+  <rect class="node" x="325" y="460" width="180" height="68"/>
+  <text class="text" x="415" y="492" text-anchor="middle">Write normalized</text>
+  <text class="small" x="415" y="514" text-anchor="middle">JSON</text>
+
+  <path class="line" d="M 210 150 L 210 285"/>
+  <text class="small" x="222" y="210">generate / run</text>
+  <path class="line" d="M 210 353 L 210 395"/>
+  <path class="line" d="M 210 463 L 210 505"/>
+  <path class="line" d="M 300 539 C 330 539, 335 500, 355 500"/>
+  <path class="line" d="M 415 408 L 415 460"/>
+  <path class="line" d="M 300 429 C 325 429, 335 390, 355 390"/>
+
+  <rect class="group" x="645" y="180" width="500" height="520"/>
+  <text class="label" x="675" y="215">Upload Flow</text>
+
+  <rect class="node" x="690" y="250" width="190" height="68"/>
+  <text class="text" x="785" y="282" text-anchor="middle">Load normalized</text>
+  <text class="small" x="785" y="304" text-anchor="middle">JSON</text>
+
+  <rect class="node" x="690" y="350" width="190" height="68"/>
+  <text class="text" x="785" y="382" text-anchor="middle">Validate</text>
+  <text class="small" x="785" y="404" text-anchor="middle">document contract</text>
+
+  <rect class="node" x="690" y="450" width="190" height="68"/>
+  <text class="text" x="785" y="482" text-anchor="middle">Compute source hash</text>
+
+  <rect class="node" x="690" y="550" width="190" height="68"/>
+  <text class="text" x="785" y="582" text-anchor="middle">Check duplicate</text>
+  <text class="small" x="785" y="604" text-anchor="middle">title + hash marker</text>
+
+  <rect class="skip" x="950" y="550" width="150" height="68"/>
+  <text class="text" x="1025" y="590" text-anchor="middle">Return skipped</text>
+
+  <rect class="node" x="930" y="250" width="180" height="68"/>
+  <text class="text" x="1020" y="282" text-anchor="middle">Resolve categories</text>
+  <text class="small" x="1020" y="304" text-anchor="middle">question + material</text>
+
+  <rect class="node" x="930" y="350" width="180" height="68"/>
+  <text class="text" x="1020" y="382" text-anchor="middle">Lock deterministic</text>
+  <text class="small" x="1020" y="404" text-anchor="middle">material id</text>
+
+  <rect class="node" x="930" y="450" width="180" height="68"/>
+  <text class="text" x="1020" y="482" text-anchor="middle">Atomic nested</text>
+  <text class="small" x="1020" y="504" text-anchor="middle">exam mutation</text>
+
+  <rect class="node" x="930" y="650" width="180" height="68"/>
+  <text class="text" x="1020" y="682" text-anchor="middle">Return upload result</text>
+
+  <rect class="node" x="930" y="550" width="180" height="68" opacity="0"/>
+  <rect class="node" x="930" y="550" width="180" height="68" fill="#ffffff" stroke="#475569" stroke-width="2" rx="12" ry="12"/>
+  <text class="text" x="1020" y="582" text-anchor="middle">Map materials_pkey</text>
+  <text class="small" x="1020" y="604" text-anchor="middle">conflict to skip/fail</text>
+
+  <rect class="node" x="690" y="650" width="190" height="68"/>
+  <text class="text" x="785" y="682" text-anchor="middle">Create material exam</text>
+  <text class="small" x="785" y="704" text-anchor="middle">parents children flat answer hotspots</text>
+
+  <path class="line-alt" d="M 570 120 C 650 120, 650 284, 690 284"/>
+  <text class="small" x="620" y="150">upload</text>
+  <path class="line" d="M 505 146 C 565 210, 650 240, 690 284"/>
+  <text class="small" x="580" y="220">validated generate output</text>
+  <path class="line-alt" d="M 785 318 L 785 350"/>
+  <path class="line-alt" d="M 785 418 L 785 450"/>
+  <path class="line-alt" d="M 785 518 L 785 550"/>
+  <path class="line-alt" d="M 880 584 L 950 584"/>
+  <path class="line-alt" d="M 880 584 C 905 584, 905 284, 930 284"/>
+  <text class="small" x="890" y="534">new / idempotency off</text>
+  <path class="line-alt" d="M 1020 318 L 1020 350"/>
+  <path class="line-alt" d="M 1020 418 L 1020 450"/>
+  <path class="line-alt" d="M 1020 518 L 1020 550"/>
+  <path class="line-alt" d="M 930 684 L 880 684"/>
+  <path class="line-alt" d="M 785 618 L 785 650"/>
+  <path class="line-alt" d="M 930 684 L 880 684"/>
+  <path class="line-alt" d="M 930 684 C 905 684, 905 684, 880 684"/>
+  <path class="line-alt" d="M 930 584 C 900 584, 900 684, 880 684"/>
+</svg>

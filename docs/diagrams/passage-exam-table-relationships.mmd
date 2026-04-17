@@ -1,0 +1,66 @@
+erDiagram
+    %% Workflow Tables
+    PASSAGE_EXAM_DRAFTS ||--o{ PASSAGE_EXAM_EVENTS : ""
+    
+    %% Published Tables
+    MATERIAL_CATEGORIES ||--o{ MATERIALS : ""
+    MATERIALS ||--|| EXAMS : ""
+    EXAMS ||--o{ EXAM_QUESTIONS : ""
+    QUESTIONS ||--o{ EXAM_QUESTIONS : ""
+    QUESTIONS ||--o{ QUESTIONS : ""
+    QUESTION_CATEGORIES ||--o{ QUESTIONS : ""
+    QUESTIONS ||--o{ HOTSPOTS : ""
+
+    PASSAGE_EXAM_DRAFTS {
+        uuid id
+        string title
+        string status
+        jsonb normalized_document_json
+    }
+
+    PASSAGE_EXAM_EVENTS {
+        uuid id
+        uuid draft_id
+        string event_type
+    }
+
+    MATERIAL_CATEGORIES {
+        uuid id
+        string code
+    }
+
+    MATERIALS {
+        uuid id
+        uuid category_id
+        string title
+    }
+
+    EXAMS {
+        uuid id
+        uuid material_id
+    }
+
+    EXAM_QUESTIONS {
+        uuid id
+        uuid exam_id
+        uuid question_id
+    }
+
+    QUESTION_CATEGORIES {
+        uuid id
+        string code
+    }
+
+    QUESTIONS {
+        uuid id
+        uuid parent_id
+        uuid category_id
+        string name
+    }
+
+    HOTSPOTS {
+        uuid id
+        uuid question_id
+        boolean is_correct
+        string content
+    }

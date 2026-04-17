@@ -1,0 +1,499 @@
+import { ChangeEvent, useEffect, useState } from "react";
+
+import {
+  generateDraft,
+  getDraft,
+  listDrafts,
+  publishDraft,
+  saveDraft,
+  uploadDraft,
+  validateDraft
+} from "./api";
+import {
+  DraftDetail,
+  DraftStatus,
+  DraftSummary,
+  PassageExamDocument,
+  ValidationIssue
+} from "./types";
+
+const statusOptions: Array<{ label: string; value: DraftStatus | "" }> = [
+  { label: "All", value: "" },
+  { label: "Uploaded", value: "uploaded" },
+  { label: "Generated", value: "generated" },
+  { label: "Reviewing", value: "reviewing" },
+  { label: "Publish Failed", value: "publish_failed" },
+  { label: "Published", value: "published" }
+];
+
+function App() {
+  const [drafts, setDrafts] = useState<DraftSummary[]>([]);
+  const [selectedDraft, setSelectedDraft] = useState<DraftDetail | null>(null);
+  const [editingDocument, setEditingDocument] = useState<PassageExamDocument | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<DraftStatus | "">("");
+  const [questionsPerGroup, setQuestionsPerGroup] = useState("4");
+  const [file, setFile] = useState<File | null>(null);
+  const [issues, setIssues] = useState<ValidationIssue[]>([]);
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"source" | "validation">("source");
+
+  useEffect(() => {
+    void refreshDrafts();
+  }, []);
+
+  async function refreshDrafts() {
+    try {
+      setError(null);
+      const items = await listDrafts(search || undefined, status || undefined);
+      setDrafts(items);
+    } catch (requestError) {
+      setError(String(requestError));
+    }
+  }
+
+  async function loadDraft(draftId: string) {
+    try {
+      setBusyLabel("Loading draft...");
+      setError(null);
+      const detail = await getDraft(draftId);
+      setSelectedDraft(detail);
+      setEditingDocument(detail.normalized_document_json ?? null);
+      setIssues([]);
+    } catch (requestError) {
+      setError(String(requestError));
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
+  async function handleUpload() {
+    if (!file) return;
+    try {
+      setBusyLabel("Uploading source...");
+      const draft = await uploadDraft(file);
+      await refreshDrafts();
+      await loadDraft(draft.id);
+      setFile(null);
+    } catch (requestError) {
+      setError(String(requestError));
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
+  async function handleGenerate() {
+    if (!selectedDraft) return;
+    try {
+      setBusyLabel("Generating quiz...");
+      const draft = await generateDraft(selectedDraft.id, Number(questionsPerGroup));
+      setSelectedDraft(draft);
+      setEditingDocument(draft.normalized_document_json ?? null);
+      await refreshDrafts();
+    } catch (requestError) {
+      setError(String(requestError));
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
+  async function handleSave() {
+    if (!selectedDraft) return;
+    try {
+      setBusyLabel("Saving draft...");
+      const draft = await saveDraft(selectedDraft.id, {
+        title: editingDocument?.title ?? selectedDraft.title,
+        description: editingDocument?.description ?? selectedDraft.description,
+        normalized_document_json: editingDocument
+      });
+      setSelectedDraft(draft);
+      setEditingDocument(draft.normalized_document_json ?? null);
+      await refreshDrafts();
+    } catch (requestError) {
+      setError(String(requestError));
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
+  async function handleValidate() {
+    if (!selectedDraft) return;
+    try {
+      setBusyLabel("Saving & Validating draft...");
+      
+      // Tự động lưu trước khi validate để đảm bảo BE kiểm tra dữ liệu mới nhất
+      await saveDraft(selectedDraft.id, {
+        title: editingDocument?.title ?? selectedDraft.title,
+        description: editingDocument?.description ?? selectedDraft.description,
+        normalized_document_json: editingDocument
+      });
+
+      const result = await validateDraft(selectedDraft.id);
+      setIssues(result.issues);
+    } catch (requestError) {
+      setError(String(requestError));
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
+  async function handlePublish() {
+    if (!selectedDraft) return;
+    try {
+      setBusyLabel("Saving & Publishing exam...");
+      
+      // Tự động lưu bản mới nhất từ giao diện xuống database trước
+      await saveDraft(selectedDraft.id, {
+        title: editingDocument?.title ?? selectedDraft.title,
+        description: editingDocument?.description ?? selectedDraft.description,
+        normalized_document_json: editingDocument
+      });
+
+      const draft = await publishDraft(selectedDraft.id);
+      setSelectedDraft(draft);
+      setEditingDocument(draft.normalized_document_json ?? null);
+      await refreshDrafts();
+    } catch (requestError) {
+      setError(String(requestError));
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
+  function updateDocument(next: PassageExamDocument) {
+    setEditingDocument(next);
+  }
+
+  function updateGroupPassage(groupIndex: number, value: string) {
+    if (!editingDocument) return;
+    const groups = editingDocument.groups.map((group, index) =>
+      index === groupIndex ? { ...group, passage: value } : group
+    );
+    updateDocument({ ...editingDocument, groups });
+  }
+
+  function updateQuestion(groupIndex: number, questionIndex: number, value: string) {
+    if (!editingDocument) return;
+    const groups = editingDocument.groups.map((group, index) => {
+      if (index !== groupIndex) return group;
+      return {
+        ...group,
+        questions: group.questions.map((question, idx) =>
+          idx === questionIndex ? { ...question, question: value } : question
+        )
+      };
+    });
+    updateDocument({ ...editingDocument, groups });
+  }
+
+  function updateChoice(groupIndex: number, questionIndex: number, choiceIndex: number, value: string) {
+    if (!editingDocument) return;
+    const groups = editingDocument.groups.map((group, index) => {
+      if (index !== groupIndex) return group;
+      return {
+        ...group,
+        questions: group.questions.map((question, idx) => {
+          if (idx !== questionIndex) return question;
+          return {
+            ...question,
+            choices: question.choices.map((choice, choiceIdx) =>
+              choiceIdx === choiceIndex ? { ...choice, content: value } : choice
+            )
+          };
+        })
+      };
+    });
+    updateDocument({ ...editingDocument, groups });
+  }
+
+  function updateCorrectAnswer(groupIndex: number, questionIndex: number, choiceIndex: number) {
+    if (!editingDocument) return;
+    const groups = editingDocument.groups.map((group, index) => {
+      if (index !== groupIndex) return group;
+      return {
+        ...group,
+        questions: group.questions.map((question, idx) => {
+          if (idx !== questionIndex) return question;
+          return {
+            ...question,
+            choices: question.choices.map((choice, choiceIdx) => ({
+              ...choice,
+              is_correct: choiceIdx === choiceIndex
+            }))
+          };
+        })
+      };
+    });
+    updateDocument({ ...editingDocument, groups });
+  }
+
+  return (
+    <div className="app-layout">
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <div className="logo-area">
+            <h1>Passage Exam</h1>
+            <p>Workflow Manager</p>
+          </div>
+          <div className="upload-box">
+            <label className="upload-label" htmlFor="file-upload" title={file ? file.name : "Select Document (.txt, .doc, .docx)"}>
+              {file ? file.name : "Select Document (.txt, .doc, .docx)"}
+            </label>
+            <input
+              id="file-upload"
+              type="file"
+              className="hidden"
+              accept=".txt,.doc,.docx"
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setFile(event.target.files?.[0] ?? null)}
+            />
+            <button className="btn-primary" onClick={handleUpload} disabled={!file || Boolean(busyLabel)}>
+              Upload Source
+            </button>
+          </div>
+        </div>
+
+        <div className="sidebar-filters">
+          <div className="filter-row">
+            <input
+              placeholder="Search title or filename..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <button className="btn-icon" onClick={() => void refreshDrafts()} disabled={Boolean(busyLabel)} title="Refresh">
+              ↻
+            </button>
+          </div>
+          <select value={status} onChange={(event) => setStatus(event.target.value as DraftStatus | "")}>
+            {statusOptions.map((option) => (
+              <option key={option.label} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="draft-list">
+          {drafts.map((draft) => (
+            <button
+              key={draft.id}
+              className={`draft-card ${selectedDraft?.id === draft.id ? "active" : ""}`}
+              onClick={() => void loadDraft(draft.id)}
+            >
+              <div className="meta">
+                <span className={`badge status-${draft.status}`}>{draft.status.replace("_", " ")}</span>
+                <span className="muted">{new Date(draft.updated_at).toLocaleDateString()}</span>
+              </div>
+              <strong>{draft.title || "Untitled Draft"}</strong>
+              <span className="filename">{draft.source_filename}</span>
+            </button>
+          ))}
+          {drafts.length === 0 && !busyLabel && (
+            <div className="empty-state" style={{ padding: "1rem" }}>
+              <span style={{ fontSize: "0.875rem" }}>No drafts found.</span>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      <main className="workspace">
+        {selectedDraft ? (
+          <>
+            <header className="workspace-header">
+              <div className="draft-info">
+                <div className="draft-info-title">
+                  <h2>{selectedDraft.title || "Untitled Draft"}</h2>
+                  <span className={`badge status-${selectedDraft.status}`}>{selectedDraft.status.replace("_", " ")}</span>
+                </div>
+                <span className="file-name">{selectedDraft.source_filename}</span>
+              </div>
+              <div className="workspace-actions">
+                <div className="generate-group">
+                  <span style={{ fontSize: "0.875rem", paddingLeft: "0.5rem", color: "var(--text-muted)" }}>Q/Group</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={questionsPerGroup}
+                    onChange={(event) => setQuestionsPerGroup(event.target.value)}
+                  />
+                  <button onClick={handleGenerate} disabled={Boolean(busyLabel)}>
+                    Generate
+                  </button>
+                </div>
+                <button onClick={handleSave} disabled={!editingDocument || Boolean(busyLabel)}>
+                  Save Review
+                </button>
+                <button onClick={handleValidate} disabled={Boolean(busyLabel)}>
+                  Validate
+                </button>
+                <button className="btn-primary" onClick={handlePublish} disabled={!editingDocument || Boolean(busyLabel)}>
+                  Publish
+                </button>
+              </div>
+            </header>
+
+            {busyLabel && <div className="alert info">{busyLabel}</div>}
+            {error && <div className="alert error">{error}</div>}
+
+            <div className="workspace-content">
+              <div className="split-view">
+                <div className="pane source-pane">
+                  <div className="pane-header">
+                    <button
+                      className={`pane-tab ${activeTab === "source" ? "active" : ""}`}
+                      onClick={() => setActiveTab("source")}
+                    >
+                      Source & History
+                    </button>
+                    <button
+                      className={`pane-tab ${activeTab === "validation" ? "active" : ""}`}
+                      onClick={() => setActiveTab("validation")}
+                    >
+                      Validation & Result
+                    </button>
+                  </div>
+                  <div className="pane-content">
+                    {activeTab === "source" ? (
+                      <>
+                        <h3 className="pane-title" style={{ padding: "0 0 0.5rem", border: "none", background: "none" }}>Source Preview</h3>
+                        <pre className="source-preview" style={{ marginBottom: "1.5rem" }}>{selectedDraft.source_text}</pre>
+                        
+                        <h3 className="pane-title" style={{ padding: "0 0 0.5rem", border: "none", background: "none" }}>Event History</h3>
+                        <ul className="event-list">
+                          {selectedDraft.events.map((event) => (
+                            <li key={event.id}>
+                              <strong>{event.event_type}</strong>
+                              <span>{new Date(event.created_at).toLocaleString()}</span>
+                              <code>{JSON.stringify(event.payload_json)}</code>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="pane-title" style={{ padding: "0 0 0.5rem", border: "none", background: "none" }}>Validation Issues</h3>
+                        {issues.length === 0 ? (
+                          <p className="muted" style={{ fontSize: "0.875rem", marginBottom: "1.5rem" }}>No validation issues loaded or no issues found.</p>
+                        ) : (
+                          <ul className="issue-list" style={{ marginBottom: "1.5rem" }}>
+                            {issues.map((issue) => (
+                              <li key={`${issue.path}-${issue.message}`}>
+                                <strong>{issue.path}</strong>
+                                <span>{issue.message}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
+                        <h3 className="pane-title" style={{ padding: "0 0 0.5rem", border: "none", background: "none" }}>Publish Result</h3>
+                        {selectedDraft.publish_result ? (
+                          <pre className="source-preview">{JSON.stringify(selectedDraft.publish_result, null, 2)}</pre>
+                        ) : (
+                          <p className="muted" style={{ fontSize: "0.875rem" }}>Draft has not been published yet.</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pane editor-pane">
+                  <h3 className="pane-title">Review Draft</h3>
+                  <div className="pane-content">
+                    {editingDocument ? (
+                      <div className="editor-form">
+                        <div className="form-group">
+                          <label>Title</label>
+                          <input
+                            value={editingDocument.title}
+                            onChange={(event) => updateDocument({ ...editingDocument, title: event.target.value })}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Description</label>
+                          <textarea
+                            rows={3}
+                            value={editingDocument.description}
+                            onChange={(event) => updateDocument({ ...editingDocument, description: event.target.value })}
+                          />
+                        </div>
+
+                        {editingDocument.groups.map((group, groupIndex) => (
+                          <div key={group.order} className="group-card">
+                            <h4>Passage Group {group.order}</h4>
+                            <div className="form-group">
+                              <label>Passage HTML/Text</label>
+                              <textarea
+                                rows={5}
+                                value={group.passage}
+                                onChange={(event) => updateGroupPassage(groupIndex, event.target.value)}
+                              />
+                            </div>
+
+                            {group.questions.map((question, questionIndex) => (
+                              <div key={question.order} className="question-card">
+                                <label>
+                                  <span>Question {question.order}</span>
+                                  <textarea
+                                    rows={3}
+                                    value={question.question}
+                                    onChange={(event) => updateQuestion(groupIndex, questionIndex, event.target.value)}
+                                  />
+                                </label>
+                                <div className="choice-grid">
+                                  {question.choices.map((choice, choiceIndex) => (
+                                    <label key={choiceIndex} className="choice-row">
+                                      <input
+                                        type="radio"
+                                        name={`correct-${group.order}-${question.order}`}
+                                        checked={choice.is_correct}
+                                        onChange={() => updateCorrectAnswer(groupIndex, questionIndex, choiceIndex)}
+                                      />
+                                      <textarea
+                                        rows={2}
+                                        value={choice.content}
+                                        onChange={(event) =>
+                                          updateChoice(groupIndex, questionIndex, choiceIndex, event.target.value)
+                                        }
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14 2 14 8 20 8"></polyline>
+                          <line x1="16" y1="13" x2="8" y2="13"></line>
+                          <line x1="16" y1="17" x2="8" y2="17"></line>
+                          <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        <h3>No Generated Exam</h3>
+                        <p>Click "Generate" to create a normalized exam from the source text.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="empty-state" style={{ background: "var(--bg-surface)", margin: "1.5rem", borderRadius: "var(--radius-lg)" }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            <h3>Select a Draft</h3>
+            <p>Upload a source file or select an existing draft from the sidebar to start reviewing.</p>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default App;

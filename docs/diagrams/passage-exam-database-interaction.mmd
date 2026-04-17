@@ -1,0 +1,30 @@
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant A as Workflow API
+    participant G as Generator
+    participant D as Hasura DB
+
+    C->>A: Upload source file
+    A->>D: Insert Draft & Event
+    D-->>A: Draft ID
+    A->>G: Generate JSON
+    G-->>A: PassageExamDoc
+    A->>D: Update Draft
+    
+    C->>A: Review & Edit
+    A->>D: Update Draft JSON
+    
+    C->>A: Publish Draft
+    A->>D: Fetch Categories
+    A->>D: Check duplicate
+    
+    alt Is Duplicate
+        A-->>C: Skip or Fail
+    else Is New
+        Note right of A: Atomic DB insert:<br/>materials, exams,<br/>questions, hotspots
+        A->>D: Insert exam mutation
+        D-->>A: Insert Success
+        A->>D: Update Draft status
+        A-->>C: PublishResult
+    end
