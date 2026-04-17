@@ -255,6 +255,7 @@ class PassageExamWorkflowService:
             progress_callback=report_generation_progress,
         )
         payload = document_to_payload(document)
+        updated_at = _now_iso()
         updated = await self.workflow_operations.update_draft(
             draft_id,
             {
@@ -269,6 +270,7 @@ class PassageExamWorkflowService:
                 "publish_result_json": None,
                 "error_message": None,
                 "updated_by": actor_id,
+                "updated_at": updated_at,
             },
         )
         if not updated:
@@ -311,10 +313,12 @@ class PassageExamWorkflowService:
             document = None
 
         status = DraftStatus.REVIEWING.value if document else draft.status.value
+        updated_at = _now_iso()
         payload: Dict[str, Any] = {
             "updated_by": actor_id,
             "status": status,
             "error_message": None,
+            "updated_at": updated_at,
         }
         if document:
             payload["title"] = document.title
@@ -377,12 +381,14 @@ class PassageExamWorkflowService:
                                                 created_by=actor_id,
                                                 idempotency=idempotency)
         except Exception as error:
+            updated_at = _now_iso()
             updated = await self.workflow_operations.update_draft(
                 draft_id,
                 {
                     "status": DraftStatus.PUBLISH_FAILED.value,
                     "error_message": str(error),
                     "updated_by": actor_id,
+                    "updated_at": updated_at,
                 },
             )
             if not updated:
@@ -400,6 +406,7 @@ class PassageExamWorkflowService:
             raise
 
         publish_result = PublishResultPayload(**result.__dict__)
+        updated_at = _now_iso()
         updated = await self.workflow_operations.update_draft(
             draft_id,
             {
@@ -407,7 +414,8 @@ class PassageExamWorkflowService:
                 "publish_result_json": model_to_payload(publish_result),
                 "error_message": None,
                 "updated_by": actor_id,
-                "published_at": _now_iso(),
+                "updated_at": updated_at,
+                "published_at": updated_at,
             },
         )
         if not updated:
