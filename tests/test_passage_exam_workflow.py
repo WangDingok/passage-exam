@@ -37,6 +37,7 @@ class FakeWorkflowOperations:
         self.drafts = {}
         self.events = []
         self.counter = 0
+        self.update_payloads = []
 
     async def create_draft(self, payload):
         self.counter += 1
@@ -54,6 +55,7 @@ class FakeWorkflowOperations:
     async def update_draft(self, draft_id, payload):
         if draft_id not in self.drafts:
             return None
+        self.update_payloads.append({"draft_id": draft_id, "payload": dict(payload)})
         self.drafts[draft_id].update(payload)
         self.drafts[draft_id]["updated_at"] = "2026-04-17T00:01:00+00:00"
         return self.drafts[draft_id]
@@ -155,6 +157,7 @@ class PassageExamWorkflowServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("generation_progress", generated.events[1].event_type)
         self.assertEqual("generation_progress", generated.events[2].event_type)
         self.assertEqual("generation_started", generated.events[3].event_type)
+        self.assertIn("updated_at", self.operations.update_payloads[-1]["payload"])
 
     async def test_update_rejects_invalid_document(self):
         draft = await self.service.upload_source(
@@ -238,6 +241,7 @@ class PassageExamWorkflowServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual("New Title", updated.title)
         self.assertEqual("New Desc", updated.description)
+        self.assertIn("updated_at", self.operations.update_payloads[-1]["payload"])
 
     async def test_validate_draft_missing_document(self):
         draft = await self.service.upload_source(
@@ -376,6 +380,23 @@ class PassageExamWorkflowServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("publish_failed", draft_detail.status.value)
         self.assertEqual("Hasura connection error", draft_detail.error_message)
         self.assertEqual("publish_failed", draft_detail.events[0].event_type)
+        self.assertIn("updated_at", self.operations.update_payloads[-1]["payload"])
+
+    async def test_publish_stores_updated_at_in_update_payload(self):
+        draft = await self.service.upload_source(
+            filename="reading_sample.txt",
+            content=b"Passage one.\n\nQuestion style.",
+            actor_id="user-1",
+        )
+        generated = await self.service.generate(
+            draft.id,
+            DraftGenerateRequest(questions_per_group=1),
+            actor_id="user-2",
+        )
+
+        await self.service.publish(generated.id, actor_id="publisher-1")
+
+        self.assertIn("updated_at", self.operations.update_payloads[-1]["payload"])
 
 
 if __name__ == "__main__":

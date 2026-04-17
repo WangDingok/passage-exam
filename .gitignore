@@ -16,6 +16,8 @@ build/
 .github/
 .coverage
 .tmp
+nohup.out*
+.grapuco
 
 # Dependencies
 node_modules/
