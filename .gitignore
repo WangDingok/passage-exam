@@ -16,6 +16,7 @@ build/
 .next/
 .github/
 .coverage
+.tmp
 
 # Dependencies
 node_modules/
